@@ -59,16 +59,25 @@ module.exports = (options = {}) => {
       files = ensureArray(files)
       files.push({ pattern: 'static/**/*', watched: false, included: false, served: true, nocache: false })
 
+      const isTypeScript = webpackConfig.module.rules
+        .map(r => r.use)
+        .reduce((acc, u) => acc.concat(u), [])
+        .map(u => u.loader)
+        .some(l => l === 'ts-loader')
+
       const port = inferValue('port', 5001)
 
       let frameworks = inferValue('frameworks', ['mocha'])
       frameworks = ensureArray(frameworks)
+      frameworks = frameworks.concat(isTypeScript ? ['karma-typescript'] : [])
 
       const watch = inferValue('watch', false)
       const coverage = inferValue('coverage')
 
       let reporters = inferValue('reporters', ['mocha'])
-      reporters = ensureArray(reporters).concat(coverage ? ['coverage'] : [])
+      reporters = ensureArray(reporters)
+      reporters = reporters.concat(isTypeScript ? ['karma-typescript'] : [])
+      reporters = reporters.concat(coverage ? ['coverage'] : [])
 
       const defaultBrowser = inferValue('headless') ? 'ChromeHeadless' : 'Chrome'
       let browsers = inferValue('browsers') || defaultBrowser
@@ -91,7 +100,7 @@ module.exports = (options = {}) => {
         },
         preprocessors: files.reduce((current, next) => {
           const key = typeof next === 'object' && next.included !== false ? next.pattern : next
-          current[key] = ['webpack']
+          current[key] = ['webpack', ...(isTypeScript ? ['karma-typescript'] : [])]
           return current
         }, {}),
         webpackMiddleware: {
@@ -100,6 +109,15 @@ module.exports = (options = {}) => {
         },
         browsers,
         singleRun: !watch
+      }
+
+      if (isTypeScript) {
+        defaultConfig.karmaTypescriptConfig = {
+          tsconfig: './tsconfig.json',
+          compilerOptions: {
+            module: 'commonjs'
+          }
+        }
       }
 
       delete webpackConfig.entry
